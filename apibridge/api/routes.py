@@ -6,6 +6,7 @@ from apibridge.core.unified_request import UnifiedRequest
 
 bp = Blueprint('api', __name__)
 
+
 @bp.route('/<provider>/v1/chat/completions', methods=['POST'])
 def chat_completions(provider):
     api_bridge = current_app.config['API_BRIDGE']
@@ -23,10 +24,11 @@ def chat_completions(provider):
 
     try:
         response = api_bridge.process_request(unified_request)
+        chat_format = api_bridge.to_chat_format(response, provider)
 
         if unified_request.stream:
             return Response(
-                stream_with_context(api_bridge.to_chat_format(response, provider)),
+                stream_with_context(chat_format),
                 content_type='text/event-stream',
                 headers={
                     'Cache-Control': 'no-cache',
@@ -35,9 +37,13 @@ def chat_completions(provider):
                 }
             )
         else:
-            return jsonify(response.content)
+            return Response(
+                stream_with_context(chat_format),
+                content_type='application/json'
+            )
     except Exception as e:
         return jsonify({'error': {'message': str(e), 'type': 'internal_error'}}), 500
+
 
 @bp.route('/<provider>/v1/models', methods=['GET'])
 def list_models(provider):
