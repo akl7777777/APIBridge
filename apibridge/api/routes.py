@@ -38,7 +38,7 @@ def chat_completions(provider):
             )
         else:
             return Response(
-                stream_with_context(chat_format),
+                chat_format,
                 content_type='application/json'
             )
     except Exception as e:

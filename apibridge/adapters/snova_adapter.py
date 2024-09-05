@@ -49,48 +49,45 @@ class SnovaAdapter(BaseAdapter):
 
     def _format_stream(self, content):
         for chunk in self._parse_stream(content):
-            yield f"data: {json.dumps(chunk)}\n\n"
-        yield "data: [DONE]\n\n"
+            yield f"data: {json.dumps(chunk)}\n\n".encode('utf-8')
+        yield b"data: [DONE]\n\n"
 
     def _format_non_stream(self, content):
-        def generate():
-            full_response = {
-                'id': None,
-                'object': 'chat.completion',
-                'created': None,
-                'model': None,
-                'choices': [{
-                    'index': 0,
-                    'message': {
-                        'role': 'assistant',
-                        'content': ''
-                    },
-                    'finish_reason': None
-                }],
-                'usage': {}
-            }
+        full_response = {
+            'id': None,
+            'object': 'chat.completion',
+            'created': None,
+            'model': None,
+            'choices': [{
+                'index': 0,
+                'message': {
+                    'role': 'assistant',
+                    'content': ''
+                },
+                'finish_reason': None
+            }],
+            'usage': {}
+        }
 
-            for chunk in self._parse_stream(content):
-                if 'id' in chunk and full_response['id'] is None:
-                    full_response['id'] = chunk['id']
-                if 'created' in chunk and full_response['created'] is None:
-                    full_response['created'] = chunk['created']
-                if 'model' in chunk and full_response['model'] is None:
-                    full_response['model'] = chunk['model']
+        for chunk in self._parse_stream(content):
+            if 'id' in chunk and full_response['id'] is None:
+                full_response['id'] = chunk['id']
+            if 'created' in chunk and full_response['created'] is None:
+                full_response['created'] = chunk['created']
+            if 'model' in chunk and full_response['model'] is None:
+                full_response['model'] = chunk['model']
 
-                if 'choices' in chunk and chunk['choices']:
-                    choice = chunk['choices'][0]
-                    if 'delta' in choice and 'content' in choice['delta']:
-                        full_response['choices'][0]['message']['content'] += choice['delta']['content']
-                    if 'finish_reason' in choice and choice['finish_reason'] is not None:
-                        full_response['choices'][0]['finish_reason'] = choice['finish_reason']
+            if 'choices' in chunk and chunk['choices']:
+                choice = chunk['choices'][0]
+                if 'delta' in choice and 'content' in choice['delta']:
+                    full_response['choices'][0]['message']['content'] += choice['delta']['content']
+                if 'finish_reason' in choice and choice['finish_reason'] is not None:
+                    full_response['choices'][0]['finish_reason'] = choice['finish_reason']
 
-                if 'usage' in chunk:
-                    full_response['usage'] = chunk['usage']
+            if 'usage' in chunk:
+                full_response['usage'] = chunk['usage']
 
-            yield full_response
-
-        return generate()
+        return json.dumps(full_response).encode('utf-8')
 
     def _parse_stream(self, content):
         for line in content.iter_lines():
