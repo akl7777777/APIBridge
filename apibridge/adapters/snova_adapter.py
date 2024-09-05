@@ -6,14 +6,15 @@ from apibridge.core.unified_response import UnifiedResponse
 
 class SnovaAdapter(BaseAdapter):
     def process(self, unified_request):
-        # 直接使用unified_request中的数据构造Snova API所需的请求体
         snova_data = {
             "body": {
                 "messages": unified_request.data.get('messages', []),
                 "max_tokens": unified_request.data.get('max_tokens', 800),
                 "stop": unified_request.data.get('stop', ["<|eot_id|>"]),
                 "stream": unified_request.data.get('stream', True),
-                "stream_options": unified_request.data.get('stream_options', {"include_usage": True}),
+                "stream_options": {
+                    "include_usage": True
+                },
                 "model": unified_request.data.get('model', "llama3-405b")
             },
             "env_type": unified_request.data.get('env_type', "tp16405b")
@@ -24,7 +25,6 @@ class SnovaAdapter(BaseAdapter):
             'Content-Type': 'application/json'
         }
 
-        # 发送请求到 Snova API
         response = requests.post(
             'https://fast.snova.ai/api/completion',
             headers=headers,
@@ -35,21 +35,29 @@ class SnovaAdapter(BaseAdapter):
         unified_response = UnifiedResponse()
         unified_response.set_status_code(response.status_code)
         unified_response.set_headers(dict(response.headers))
-
-        if snova_data['body']['stream']:
-            unified_response.set_content(response.iter_lines())
-        else:
-            unified_response.set_content(response.json())
-
+        unified_response.set_content(response)
         unified_response.set_is_stream(snova_data['body']['stream'])
 
         return unified_response
 
     def to_chat_format(self, unified_response):
-        if unified_response.is_stream:
-            return self._format_stream(unified_response.content)
-        else:
-            return self._format_response(unified_response.content)
+        def generate():
+            for line in unified_response.content.iter_lines():
+                if line:
+                    try:
+                        text = line.decode('utf-8').strip()
+                        if text.startswith('data: '):
+                            text = text[6:]
+                        if text == '[DONE]':
+                            yield 'data: [DONE]\n\n'
+                        else:
+                            chunk = json.loads(text)
+                            yield f"data: {json.dumps(chunk)}\n\n"
+                    except json.JSONDecodeError:
+                        yield f"data: {line.decode('utf-8')}\n\n"
+                yield ''  # 发送一个空字符串来刷新缓冲区
+
+        return generate()
 
     def _format_stream(self, content):
         for line in content:

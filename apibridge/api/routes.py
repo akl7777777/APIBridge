@@ -25,29 +25,15 @@ def chat_completions(provider):
         response = api_bridge.process_request(unified_request)
 
         if unified_request.stream:
-            def generate():
-                for chunk in response.content:
-                    if isinstance(chunk, dict):
-                        if 'done' in chunk:
-                            yield 'data: [DONE]\n\n'
-                        elif 'error' in chunk:
-                            yield f"data: {json.dumps(chunk)}\n\n"
-                        else:
-                            yield f"data: {json.dumps(chunk)}\n\n"
-                    elif isinstance(chunk, (str, bytes)):
-                        if isinstance(chunk, bytes):
-                            chunk = chunk.decode('utf-8')
-                        lines = chunk.split('\n')
-                        for line in lines:
-                            if line.strip():
-                                yield f"{line}\n\n"
-
-            headers = {
-                'Cache-Control': 'no-cache',
-                'X-Accel-Buffering': 'no',
-                'Content-Type': 'text/event-stream',
-            }
-            return Response(stream_with_context(generate()), content_type='text/event-stream', headers=headers)
+            return Response(
+                stream_with_context(api_bridge.to_chat_format(response, provider)),
+                content_type='text/event-stream',
+                headers={
+                    'Cache-Control': 'no-cache',
+                    'X-Accel-Buffering': 'no',
+                    'Transfer-Encoding': 'chunked'
+                }
+            )
         else:
             return jsonify(response.content)
     except Exception as e:
