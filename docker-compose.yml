@@ -4,7 +4,7 @@ services:
   apibridge:
     build: .
     ports:
-      - "5000:5000"
+      - "5566:5566"
     environment:
       - FLASK_ENV=production
       - FLASK_APP=app.py
